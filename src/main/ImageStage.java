@@ -51,6 +51,8 @@ public class ImageStage extends Stage {
 
 	public void nullAndClose() {
 
+
+
 		image = null;
 		imagePlane = null;
 		imageContainer = null;

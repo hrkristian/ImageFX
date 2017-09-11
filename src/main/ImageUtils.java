@@ -1,9 +1,9 @@
 package main;
 
-import javafx.scene.image.Image;
-import javafx.scene.image.PixelFormat;
-import javafx.scene.image.PixelReader;
-import javafx.scene.image.WritableImage;
+import javafx.scene.image.*;
+import javafx.scene.paint.Color;
+
+import java.util.Random;
 
 public class ImageUtils {
 
@@ -50,12 +50,10 @@ public class ImageUtils {
 		byte[] array = new byte[width * height * 4];
 		image.getPixelReader().getPixels(0, 0, width, height, PixelFormat.getByteBgraInstance(), array, 0, width * 4);
 
-//		printImageByteArrayValues(array);
-
 		return array;
 	}
 
-	public static byte[] convertFromRbgaToGreyscale(byte[] array) {
+	public static byte[] convertFromRbgaToAveragedGreyscale(byte[] array) {
 		byte[] newArray = new byte[array.length / 4];
 
 		int value = 0;
@@ -65,6 +63,8 @@ public class ImageUtils {
 			value += Byte.toUnsignedInt(array[i*4+2]);
 
 			newArray[i] = (byte)((value / 3) & 0xff);
+
+			value = 0;
 		}
 
 		return newArray;
@@ -81,14 +81,53 @@ public class ImageUtils {
 
 		return rgbArray;
 	}
-	public static int[] createHistogrammaticalData(byte[] array) {
-		int[] histogram = new int[256];
 
-		for (int i = 0; i < array.length; i++)
-			histogram[ Byte.toUnsignedInt(array[i]) ]++;
+	/**
+	 * @param sizeInPixels the size of the (square) image
+	 * @return a drawn image
+	 */
+	public static ProcessingImage createGaussianDistributedImage(int sizeInPixels) {
 
-		for (int i : histogram)
-			System.out.println(i);
+		int gaussianNumber = 0;
+		Random rnd = new Random();
+		ProcessingImage newImage = new ProcessingImage(sizeInPixels, sizeInPixels);
+		PixelWriter newImageWriter = newImage.getPixelWriter();
+
+		for (int i = 0; i < sizeInPixels; i++) {
+			for (int j = 0; j < sizeInPixels; j++) {
+				gaussianNumber = (int)(rnd.nextGaussian() * 50 + 128);
+
+				if (gaussianNumber < 0) gaussianNumber = 0;
+				else if (gaussianNumber > 255) gaussianNumber = 255;
+
+				newImageWriter.setColor(i, j, Color.grayRgb(gaussianNumber));
+			}
+		}
+		return newImage;
+	}
+
+	public static int[] createCumulativeHistogramData(byte[] originBand) {
+		if (originBand == null)
+			throw new NullPointerException("Nigga you null?");
+
+		int[] histogram = new int[originBand.length];
+		for (int i = 0; i < originBand.length; i++)
+			histogram[ Byte.toUnsignedInt(originBand[i]) ]++;
+
+		int[] cumulative = new int[histogram.length];
+		for (int i = 0; i < originBand.length; i++)
+			cumulative[i] = (i == 0) ? histogram[i] : histogram[i] + cumulative[i-1];
+
+		return cumulative;
+	}
+
+	public static int[] createNormalisedHistogramData(byte[] originBand) {
+		if (originBand == null)
+			throw new NullPointerException("Nigga you null?");
+
+		int[] histogram = new int[originBand.length];
+		for (int i = 0; i < originBand.length; i++)
+			histogram[ Byte.toUnsignedInt(originBand[i]) ]++;
 
 		return histogram;
 	}
@@ -100,5 +139,4 @@ public class ImageUtils {
 			else
 				System.out.print( Byte.toUnsignedInt(array[i-1]) + " ");
 	}
-
 }
