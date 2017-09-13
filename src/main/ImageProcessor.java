@@ -4,31 +4,58 @@ import javafx.beans.property.ReadOnlyObjectProperty;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.scene.image.*;
 import javafx.scene.paint.Color;
+import main.imageUtils.BrightnessUtils;
 
-public class ImageProcessor {
+public class ImageProcessor implements ImageObserver {
 
-	ProcessingImage image;
-	PixelReader imageReader;
-	PixelWriter imageWriter;
+	protected ImageDetails imageDetails;
 
-	int imageHeight, imageWidth;
-	double imageSizeFactor;
-
-	ImageStage imageStage;
+	/* Display */
+	private ImageStage imageStage;
 
 	// Secondary tools
-	Histogram histogram;
+	private Histogram histogram;
+
+	/* New Observable-centric variables */
+	private WritableImage image;
+	private int imageWidth, imageHeight;
+	private double imageSizeFactor;
+	private PixelReader imageReader;
+	private PixelWriter imageWriter;
 
 	public ImageProcessor(Image originImage) {
-		imageStage = new ImageStage(originImage);
+		imageDetails = new ImageDetails();
 
-		doImageCalculations(originImage);
-		updateImageAndTools( new ProcessingImage(originImage.getPixelReader(), imageWidth, imageHeight) );
+		setImagePropertyListener(imageDetails.getImageReadOnlyProperty());
+
+		imageDetails.setImage(originImage);
+
+		imageStage = new ImageStage(originImage);
+		imageStage.setImagePropertyListener(imageDetails.getImageReadOnlyProperty());
+	}
+	public ImageProcessor(Image originImage, String filePath) {
+		this(originImage);
+		imageDetails.filePath = filePath;
 	}
 
+	public void setImagePropertyListener(ReadOnlyObjectProperty<Image> observedImageProperty) {
+		observedImageProperty.addListener(imageUpdate -> {
+			image = (WritableImage)observedImageProperty.getValue();
+			imageWidth = (int)image.getWidth();
+			imageHeight = (int)image.getHeight();
+			imageSizeFactor = imageWidth / imageHeight;
+			imageReader = image.getPixelReader();
+			imageWriter = image.getPixelWriter();
+		});
+	}
+
+
+	/* Mostly pointless shit */
 	public void flipImageOverX() {
 		Color leftColor, rightColor;
-		doImageCalculations();
+
+		WritableImage tmpImage = new WritableImage(imageWidth, imageHeight);
+		PixelWriter tmpWriter = tmpImage.getPixelWriter();
 
 		for (int i = 0; i < imageHeight; i++) {
 			for (int j = 0; j < imageWidth/2; j++) {
@@ -36,17 +63,18 @@ public class ImageProcessor {
 				leftColor = imageReader.getColor(j,i);
 				rightColor = imageReader.getColor(rightPos, i);
 
-				imageWriter.setColor( j, i, rightColor );
-				imageWriter.setColor( rightPos, i, leftColor );
+				tmpWriter.setColor( j, i, rightColor );
+				tmpWriter.setColor( rightPos, i, leftColor );
 			}
 		}
 
-		imageStage.imagePlane.setImage(image);
-
+		imageDetails.setImage(tmpImage);
 	}
 	public void flipImageOverY() {
 		Color topColor, bottomColor;
-		doImageCalculations();
+
+		WritableImage tmpImage = new WritableImage(imageWidth, imageHeight);
+		PixelWriter tmpWriter = tmpImage.getPixelWriter();
 
 		for (int i = 0; i < imageWidth; i++) {
 			for (int j = 0; j < imageHeight/2; j++) {
@@ -54,28 +82,26 @@ public class ImageProcessor {
 				topColor = imageReader.getColor(i,j);
 				bottomColor = imageReader.getColor(i, bottomPos);
 
-				imageWriter.setColor(i, j, bottomColor);
-				imageWriter.setColor(i, bottomPos, topColor);
+				tmpWriter.setColor(i, j, bottomColor);
+				tmpWriter.setColor(i, bottomPos, topColor);
 
 			}
 		}
 
-		imageStage.imagePlane.setImage(image);
+		imageDetails.setImage(tmpImage);
 	}
 	public void flipImageOverXY() {
-		doImageCalculations();
 
-		ProcessingImage tmpImage = new ProcessingImage(imageHeight, imageWidth);
+		WritableImage tmpImage = new WritableImage(imageHeight, imageWidth);
 		PixelWriter tmpWriter = tmpImage.getPixelWriter();
 
 		for (int i = 0; i < imageWidth; i++)
 			for (int j = 0; j < imageHeight; j++)
 				tmpWriter.setColor(j, i, imageReader.getColor(i, j));
 
-		updateImageAndTools(tmpImage);
+		imageDetails.setImage(tmpImage);
 	}
 	public void frameImageWithBorder() {
-		doImageCalculations();
 
 		final int VAL = 50;
 		int xSpacing = VAL;
@@ -84,7 +110,7 @@ public class ImageProcessor {
 		int newWidth = imageWidth + (xSpacing*2);
 		int newHeight = imageHeight + (ySpacing*2);
 
-		ProcessingImage tmpImage = new ProcessingImage(newWidth, newHeight);
+		WritableImage tmpImage = new WritableImage(newWidth, newHeight);
 		PixelWriter tmpWriter = tmpImage.getPixelWriter();
 
 		for (int i = 0; i < newHeight; i++) {
@@ -102,7 +128,7 @@ public class ImageProcessor {
 			}
 		}
 
-		updateImageAndTools(tmpImage);
+		imageDetails.setImage(tmpImage);
 	}
 	private void rotateImage(int degrees) { // DO NOT USE
 		switch (degrees) {
@@ -113,23 +139,20 @@ public class ImageProcessor {
 		}
 
 
-		doImageCalculations();
 
-		ProcessingImage tmpImage = new ProcessingImage(imageHeight, imageWidth);
+		WritableImage tmpImage = new WritableImage(imageHeight, imageWidth);
 		PixelWriter tmpWriter = tmpImage.getPixelWriter();
 
 		for (int i = 0; i < imageWidth; i++)
 			for (int j = 0; j < imageHeight; j++)
 				tmpWriter.setColor(j, i, imageReader.getColor(i, j));
 
-		updateImageAndTools(tmpImage);
 	}
 	public void moveImageHorizontally(int percentage) {
 		if (percentage < 0 || percentage > 100)
 			throw new IllegalArgumentException();
 
-		doImageCalculations();
-		ProcessingImage tmpImage = new ProcessingImage(imageWidth, imageHeight);
+		WritableImage tmpImage = new WritableImage(imageWidth, imageHeight);
 		PixelWriter tmpWriter = tmpImage.getPixelWriter();
 
 		double percentageAsDecimal = percentage/100.0;
@@ -143,37 +166,10 @@ public class ImageProcessor {
 			}
 		}
 
-		updateImageAndTools(tmpImage);
-	}
-	/**
-	 * Does not work, and fuck it.
-	 */
-	public void animateImageHorizontally() {
-		doImageCalculations();
-
-		System.out.println("Width: "+imageWidth);
-		System.out.println("Height: "+imageHeight);
-
-		ProcessingImage tmpImage;
-		PixelWriter tmpWriter;
-
-		for (int i = 0; i < imageWidth; i++) {
-			tmpImage = new ProcessingImage(imageWidth, imageHeight);
-			tmpWriter = tmpImage.getPixelWriter();
-
-			for (int j = 0; j < imageWidth; j++ )
-				for (int k = 0; k < imageHeight; k++)
-					tmpWriter.setColor(j, k, imageReader.getColor(increment(j, imageWidth), k));
-
-			updateImageAndTools(tmpImage);
-
-			try { Thread.sleep(100); }
-			catch(InterruptedException e) {}
-
-		}
-		System.out.println("Done.");
+		imageDetails.setImage(tmpImage);
 	}
 
+	/* The beginning of multithreading capabilities and shit */
 	public TiledImage splitImage() {
 		return ImageUtils.splitImage(image);
 	}
@@ -182,6 +178,8 @@ public class ImageProcessor {
 			new ImageStage(img, 200);
 	}
 
+
+	/* Useful shit */
 	public void showImageHistogram() {
 		histogram = new Histogram();
 
@@ -192,31 +190,23 @@ public class ImageProcessor {
 
 		byte[] greyscale = ImageUtils.convertFromRbgaToAveragedGreyscale(ImageUtils.getImageAsByteArray(image));
 		histogram.populateHistogram(greyscale, "greyscale");
+
+		histogram.setImagePropertyListener(imageDetails.getImageReadOnlyProperty());
+	}
+
+	/* Brightness shit */
+	public void adjustBrightness(int amount) {
+		byte[][] theByteThing = ImageUtils.splitRbgaToIndividualRbg(ImageUtils.getImageAsByteArray(image));
+		int[] theAmountThing = {amount, amount, amount};
+
+		theByteThing = ImageUtils.adjustBrightness(theByteThing, theAmountThing);
+		imageDetails.setImage(ImageUtils.createImageFromRgbByteArray(theByteThing, imageWidth, imageHeight));
 	}
 
 
-	// Utility
+	/* Utility */
 	private int increment(int current, int max) {
 		return (++current >= max) ? 0 : current;
-	}
-
-	/**
-	 * TODO- Deprecate; use Observables instead.
-	 * @param tmpImage
-	 */
-	private void updateImageAndTools(ProcessingImage tmpImage) {
-		imageStage.imagePlane.setImage(image = tmpImage);
-		imageReader = image.getPixelReader();
-		imageWriter = image.getPixelWriter();
-	}
-
-	private void doImageCalculations(Image tmpImage) {
-		imageHeight = (int)tmpImage.getHeight();
-		imageWidth = (int)tmpImage.getWidth();
-		imageSizeFactor = (double)imageHeight / (double)imageWidth;
-	}
-	private void doImageCalculations() {
-		doImageCalculations(image);
 	}
 
 	public void nullAndClose() {
@@ -224,11 +214,13 @@ public class ImageProcessor {
 		imageStage = null;
 	}
 
-
-	class ProcessingImageHandler {
+	/**
+	 *
+	 */
+	class ImageDetails {
 
 		/* Observables */
-		private ReadOnlyObjectWrapper<main.ProcessingImage.ImageStatus> imageStateProperty;
+		private ReadOnlyObjectWrapper<ImageStatus> imageStateProperty;
 		private ReadOnlyObjectWrapper<Image> currentImageProperty;
 
 		/* Shit */
@@ -238,33 +230,38 @@ public class ImageProcessor {
 
 		/* Details */
 		private String filePath;
-		private main.ProcessingImage.ImageType type;
+		private ImageType type;
 
-
-		public ProcessingImageHandler(Image image) {
+		public ImageDetails() {
+			imageStateProperty = new ReadOnlyObjectWrapper<>(ImageStatus.INITIALISING);
+			currentImageProperty = new ReadOnlyObjectWrapper<Image>(null);
+		}
+		public ImageDetails(Image image) {
 			this.image = new WritableImage( image.getPixelReader(), (int)image.getWidth(), (int)image.getHeight() );
 			sharedConstructorTasks();
 		}
-		public ProcessingImageHandler(int width, int height) {
+		public ImageDetails(int width, int height) {
 			this.image = new WritableImage( width, height );
 			sharedConstructorTasks();
 		}
 
 		private void sharedConstructorTasks() {
-			imageStateProperty = new ReadOnlyObjectWrapper<>(main.ProcessingImage.ImageStatus.INITIALISING);
-			// TODO: Utilize ImageUtils to judge the content of the image; create details.
+			imageStateProperty = new ReadOnlyObjectWrapper<>(ImageStatus.INITIALISING);
+			currentImageProperty = new ReadOnlyObjectWrapper<>(image);
 
-			setProcessingProperty(main.ProcessingImage.ImageStatus.AVAILABLE);
+			// TODO- Utilize ImageUtils to judge the content of the image; create details.
+
+			setProcessingProperty(ImageStatus.AVAILABLE);
 		}
-
-		/* Exposed methods */
-
 		/**
 		 *
 		 * @return the read only property of the Image's status
 		 */
-		public ReadOnlyObjectProperty<main.ProcessingImage.ImageStatus> getimageStateReadOnlyProperty() {
+		public ReadOnlyObjectProperty<ImageStatus> getimageStateReadOnlyProperty() {
 			return imageStateProperty.getReadOnlyProperty();
+		}
+		public ReadOnlyObjectProperty<Image> getImageReadOnlyProperty() {
+			return currentImageProperty.getReadOnlyProperty();
 		}
 
 		/**
@@ -279,28 +276,32 @@ public class ImageProcessor {
 		 * TODO- Throw exception instead of null?
 		 * @return the image for processing, or null if image is being processed
 		 */
-		synchronized public WritableImage getImageForProcessing() {
-			if (imageStateProperty.getValue() == main.ProcessingImage.ImageStatus.AVAILABLE) {
-				imageStateProperty.set(main.ProcessingImage.ImageStatus.PROCESSING);
+		public WritableImage getImageForProcessing() {
+			if (imageStateProperty.getValue() == ImageStatus.AVAILABLE) {
+				imageStateProperty.set(ImageStatus.PROCESSING);
 				backupImage = image;
 				return image;
 			}
 			return null;
 		}
 
-		synchronized public void setImage(Image newImage) { // TODO- Necessary?
+		public void setImage(Image newImage) { // TODO- Necessary?
 			setImage(new WritableImage(newImage.getPixelReader(), (int)newImage.getWidth(), (int)newImage.getHeight()));
 		}
-		synchronized public void setImage(WritableImage newImage) {
+
+		public void setImage(WritableImage newImage) {
 			image = newImage;
 			currentImageProperty.set(image);
-			imageStateProperty.set(main.ProcessingImage.ImageStatus.AVAILABLE);
+			imageStateProperty.set(ImageStatus.AVAILABLE);
 		}
 
-		private void setProcessingProperty(main.ProcessingImage.ImageStatus status) {
+
+		/* Private functions */
+		private void setProcessingProperty(ImageStatus status) {
 			imageStateProperty.set(status);
 		}
 	}
+
 	public enum ImageStatus {
 		AVAILABLE,
 		PROCESSING,

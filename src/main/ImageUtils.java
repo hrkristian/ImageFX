@@ -2,6 +2,7 @@ package main;
 
 import javafx.scene.image.*;
 import javafx.scene.paint.Color;
+import main.imageUtils.BrightnessUtils;
 
 import java.util.Random;
 
@@ -81,16 +82,30 @@ public class ImageUtils {
 
 		return rgbArray;
 	}
+	public static WritableImage createImageFromRgbByteArray(byte[][] originArray, int width, int height) {
+		byte[] mergedArray = new byte[ originArray[0].length*3 ];
+
+		for (int i = 0, pos = 0; i < originArray.length; i++, pos = i * 3) {
+			mergedArray[i*4] = originArray[0][i]; // red
+			mergedArray[i*4+1] = originArray[1][i]; // green
+			mergedArray[i*4+2] = originArray[2][i]; // blue
+		}
+
+		WritableImage image = new WritableImage(width, height);
+		image.getPixelWriter().setPixels(0, 0, width, height, PixelFormat.getByteRgbInstance(), mergedArray, 0, width * 3);
+
+		return image;
+	}
 
 	/**
 	 * @param sizeInPixels the size of the (square) image
 	 * @return a drawn image
 	 */
-	public static ProcessingImage createGaussianDistributedImage(int sizeInPixels) {
+	public static WritableImage createGaussianDistributedImage(int sizeInPixels) {
 
 		int gaussianNumber = 0;
 		Random rnd = new Random();
-		ProcessingImage newImage = new ProcessingImage(sizeInPixels, sizeInPixels);
+		WritableImage newImage = new WritableImage(sizeInPixels, sizeInPixels);
 		PixelWriter newImageWriter = newImage.getPixelWriter();
 
 		for (int i = 0; i < sizeInPixels; i++) {
@@ -132,11 +147,22 @@ public class ImageUtils {
 		return histogram;
 	}
 
+	public static byte[][] adjustBrightness(byte[][] bands, int[] values) {
+		return BrightnessUtils.adjustBrightness(bands, values);
+	}
+	public static byte[] adjustBrightness(byte[] band, int value) {
+		return BrightnessUtils.adjustBrightness(band, value);
+	}
+
 	public static void printImageByteArrayValues(byte[] array) {
 		for (int i = 1; i <= array.length; i++)
 			if (i % 4 == 0)
 				System.out.println( array[i-1] );
 			else
 				System.out.print( Byte.toUnsignedInt(array[i-1]) + " ");
+	}
+
+	public static byte unsignedIntToByte(int intByte) {
+		return (byte)(intByte & 0xff);
 	}
 }

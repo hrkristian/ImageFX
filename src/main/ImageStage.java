@@ -1,5 +1,6 @@
 package main;
 
+import javafx.beans.property.ReadOnlyObjectProperty;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
@@ -7,7 +8,8 @@ import javafx.scene.image.ImageView;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
-public class ImageStage extends Stage {
+public class ImageStage extends Stage implements ImageObserver {
+
 	Scene imageScene;
 	VBox imageContainer;
 	ImageView imagePlane;
@@ -51,13 +53,19 @@ public class ImageStage extends Stage {
 
 	public void nullAndClose() {
 
-
-
 		image = null;
 		imagePlane = null;
 		imageContainer = null;
 		imageScene = null;
 
 		close();
+
+	}
+
+	@Override
+	public void setImagePropertyListener(ReadOnlyObjectProperty<Image> observedImageProperty ) {
+		observedImageProperty.addListener(update -> {
+			imagePlane.setImage( image = observedImageProperty.getValue() );
+		});
 	}
 }

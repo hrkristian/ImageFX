@@ -36,6 +36,7 @@ public class RootStage extends Stage {
     private Button animateImageHorizontallyButton;
     private Button splitImageIntoTilesButton;
     private Button showImageHistogramButton;
+    private Button adjustBrightnessButton;
 
 
 	private Text statusMessage;
@@ -43,9 +44,13 @@ public class RootStage extends Stage {
 
 	FileChooser imageFileChooser;
 	File selectedImageFile = null;
+
 	Image image = null;
 	ImageProcessor imageProcessor;
+	ImageProcessor.ImageDetails imageDetails;
+
 	PluginInterface pluginInterface = new PluginInterface(imageProcessor);
+
 
 	public RootStage() throws Exception {
 		super();
@@ -62,6 +67,8 @@ public class RootStage extends Stage {
 		setResizable(false);
 		setTitle("ImageFX");
 	}
+
+
 
 	private void setContent() {
 		imageFileChooser = new FileChooser();
@@ -93,8 +100,8 @@ public class RootStage extends Stage {
 				flipImageOverXYButton = new Button("Flip XY"),
 				frameImageWithBorderButton = new Button("Frame Image"),
 				moveImageHorizontallyButton = new Button("Move ->"),
-				animateImageHorizontallyButton = new Button("Move ->>>"), // TODO- Remove
 				splitImageIntoTilesButton = new Button("Split"),
+				adjustBrightnessButton = new Button("Adjust Brightness"),
 				showImageHistogramButton = new Button("Histogram")
 		};
 		imageToolButtons = tmpImageToolButtons;
@@ -106,16 +113,10 @@ public class RootStage extends Stage {
 				imageFileChooserButton,
 				createGaussianDistributedImage
 		);
-		toolTabPane.getChildren().addAll(
-				flipImageOverXButton,
-				flipImageOverYButton,
-				flipImageOverXYButton,
-				frameImageWithBorderButton,
-				moveImageHorizontallyButton,
-				animateImageHorizontallyButton,
-				splitImageIntoTilesButton,
-				showImageHistogramButton
-		);
+
+		for (Button btn : imageToolButtons)
+			toolTabPane.getChildren().add(btn);
+
 		infoTabPane.getChildren().addAll(
 
 		);
@@ -158,27 +159,7 @@ public class RootStage extends Stage {
 				btn.setDisable(false);
 		});
 
-		imageFileChooserButton.setOnAction(choose -> { // TODO- Links to image and/or the observableProperty, etc.
-
-			selectedImageFile = imageFileChooser.showOpenDialog(new Stage());
-			if (selectedImageFile != null) {
-				try {
-					image = new Image(new FileInputStream(selectedImageFile.getAbsolutePath()));
-					for (Button btn : imageToolButtons)
-						btn.setDisable(false);
-					statusMessage.setText("Image opened...");
-				} catch (FileNotFoundException e) {
-					statusMessage.setText("An error occured while reading the selected file; may not exist.");
-				}
-			}
-
-			if (image != null) {
-				if (imageProcessor != null)
-					imageProcessor.nullAndClose();
-
-				imageProcessor = new ImageProcessor(image);
-			}
-		});
+		imageFileChooserButton.setOnAction(choose -> { showFileChooser(); });
 
 		flipImageOverXButton.setOnAction(flipX -> { imageProcessor.flipImageOverX(); });
 		flipImageOverYButton.setOnAction(flipY -> { imageProcessor.flipImageOverY(); });
@@ -203,9 +184,47 @@ public class RootStage extends Stage {
 				}
 			});
 		});
-		animateImageHorizontallyButton.setOnAction(cycle -> { imageProcessor.animateImageHorizontally(); });
 		splitImageIntoTilesButton.setOnAction(split -> { imageProcessor.displayImageTiles(imageProcessor.splitImage()); });
+		adjustBrightnessButton.setOnAction(adjust -> {
+			TextField input = new TextField();
+			PromptStage prompt = new PromptStage("Amount to adjust by? \n Values above 255 will have no additional effect.", input  );
+			input.setOnAction(value -> {
+				try {
+					int amount = Integer.parseInt(input.getText().trim());
+					imageProcessor.adjustBrightness(amount);
+				} catch (NumberFormatException e) {
+					prompt.setStatusMessage("Illegal input. Must be an integer.");
+				}
+			});
+		});
 		showImageHistogramButton.setOnAction(histogram -> { imageProcessor.showImageHistogram(); });
+	}
+
+	/**
+	 * Starts the file chooser and, if an image is opened, creates an ImageProcessor
+	 */
+	private void showFileChooser() { // TODO- Links to image and/or the observableProperty, etc.
+		selectedImageFile = imageFileChooser.showOpenDialog(new Stage());
+		if (selectedImageFile != null) {
+			try {
+				image = new Image(new FileInputStream(selectedImageFile.getAbsolutePath()));
+				for (Button btn : imageToolButtons)
+					btn.setDisable(false);
+				statusMessage.setText("Image opened...");
+			} catch (FileNotFoundException e) {
+				statusMessage.setText("An error occured while reading the selected file; may not exist.");
+			}
+		}
+
+		if (image != null) {
+
+			if (imageProcessor != null)
+				imageProcessor.nullAndClose();
+
+			imageProcessor = new ImageProcessor(image);
+			imageDetails = imageProcessor.imageDetails;
+
+		}
 	}
 
 

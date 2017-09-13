@@ -1,5 +1,7 @@
 package main;
 
+import javafx.application.Platform;
+import javafx.beans.property.ReadOnlyObjectProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
@@ -11,6 +13,7 @@ import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.ComboBox;
+import javafx.scene.image.Image;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
@@ -20,16 +23,18 @@ import javafx.stage.Stage;
 import java.util.HashMap;
 import java.util.Map;
 
-public class Histogram extends Stage {
+public class Histogram extends Stage implements ImageObserver {
 
 	private VBox root;
 	private Pane canvasPane;
 	private ObservableList<String> histogramBands;
 	private HashMap<String, HistogramSection> histogramSections;
 
-	final int CANVAS_HEIGHT = 200;
-	final int CANVAS_WIDTH = 512; // Only multiples of 256. This is linked to canvas painters!
-	final int SCALE_REPRESENTATION_HEIGHT = 20;
+	private ComboBox histogramSelector;
+
+	private final int CANVAS_HEIGHT = 200;
+	private final int CANVAS_WIDTH = 512; // Only multiples of 256. This is linked to canvas painters!
+	private final int SCALE_REPRESENTATION_HEIGHT = 20;
 
 	public Histogram() {
 		super();
@@ -43,7 +48,7 @@ public class Histogram extends Stage {
 		histogramBands.add("empty");
 		histogramSections.put("empty", new HistogramSection());
 
-		final ComboBox histogramSelector = new ComboBox(histogramBands);
+		histogramSelector = new ComboBox(histogramBands);
 		histogramSelector.valueProperty().setValue(histogramBands.get(0));
 		histogramSelector.setStyle("-fx-font-size: 18px;");
 
@@ -152,6 +157,8 @@ public class Histogram extends Stage {
 		histogramSections.put(band, new HistogramSection());
 		histogramBands.add(band);
 
+		histogramSelector.valueProperty().setValue(histogramBands.get(0));
+
 		return true;
 	}
 	private void removeFromHistogramSectionMap(String band) {
@@ -176,6 +183,33 @@ public class Histogram extends Stage {
 
 		for (int i = 0; i < description.length; i++)
 			populateHistogram(bands[i], description[i]);
+	}
+
+	@Override
+	public void setImagePropertyListener(ReadOnlyObjectProperty<Image> observedImageProperty) {
+		observedImageProperty.addListener(listener -> {
+			new Thread(() -> {
+
+				/* Create new workable data
+				* Frees the main thread from doing background calculations */
+				byte[] imageByteData = ImageUtils.getImageAsByteArray( observedImageProperty.getValue() );
+				byte[] newGreyscaleBand = ImageUtils.convertFromRbgaToAveragedGreyscale(imageByteData);
+				byte[][] newRgbBands = ImageUtils.splitRbgaToIndividualRbg( imageByteData );
+				String[] bands = {"Red", "Green", "Blue"};
+
+				/* Clear all old references */
+				Platform.runLater(() -> {
+					histogramSections.clear();
+					histogramBands.clear();
+					canvasPane.getChildren().clear();
+
+					populateHistogram(newGreyscaleBand, "Greyscale");
+					populateHistogram(newRgbBands, bands);
+				});
+
+
+			} ).start();
+		});
 	}
 
 
