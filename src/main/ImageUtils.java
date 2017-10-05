@@ -3,7 +3,11 @@ package main;
 import javafx.scene.image.*;
 import javafx.scene.paint.Color;
 import main.imageUtils.BrightnessUtils;
+import main.imageUtils.MiscUtils;
 
+import static java.lang.Math.*;
+
+import java.util.Arrays;
 import java.util.Random;
 
 public class ImageUtils {
@@ -51,33 +55,51 @@ public class ImageUtils {
 		byte[] array = new byte[width * height * 4];
 		image.getPixelReader().getPixels(0, 0, width, height, PixelFormat.getByteBgraInstance(), array, 0, width * 4);
 
+//		System.out.println("New BGRA array length: "+array.length);
+
 		return array;
 	}
 
-	public static byte[] convertFromRbgaToAveragedGreyscale(byte[] array) {
+	public static byte[] convertFromBgraToAveragedGreyscale(byte[] array) {
 		byte[] newArray = new byte[array.length / 4];
 
-		int value = 0;
-		for (int i = 0; i < array.length / 4; i++) {
-			value += Byte.toUnsignedInt(array[i*4]);
-			value += Byte.toUnsignedInt(array[i*4+1]);
-			value += Byte.toUnsignedInt(array[i*4+2]);
+		for (int i = 0, value; i < array.length / 4; i++) {
+			value = Byte.toUnsignedInt(array[ i*4] );
+			value += Byte.toUnsignedInt(array[ i*4+1] );
+			value += Byte.toUnsignedInt(array[ i*4+2] );
 
-			newArray[i] = (byte)((value / 3) & 0xff);
+			newArray[i] = (byte)(value / 3);
+		}
 
-			value = 0;
+		return newArray;
+	}
+	public static byte[] convertFromRgbToGreyscale(byte[][] bands) {
+		if (bands.length != 3)
+			throw new IllegalArgumentException("Method expects three bands.");
+
+		if (bands[0].length != bands[1].length || bands[0].length != bands[2].length)
+			throw new IllegalArgumentException("Method expects bands of equal length.");
+
+		byte[] newArray = new byte[bands[0].length];
+
+		for (int i = 0, value; i < bands[0].length; i++) {
+			value =  Byte.toUnsignedInt( bands[0][i] );
+			value += Byte.toUnsignedInt( bands[1][i] );
+			value += Byte.toUnsignedInt( bands[2][i] );
+
+			newArray[i] = (byte)(value / 3);
 		}
 
 		return newArray;
 	}
 
 	public static byte[][] splitRbgaToIndividualRbg(byte[] originArray) {
-		byte[][] rgbArray = new byte[3][originArray.length / 4 + 4];
+		byte[][] rgbArray = new byte[3][originArray.length / 4];
 
 		for (int i = 0; i < originArray.length / 4; i++) {
-			rgbArray[0][i] = originArray[i*4];
-			rgbArray[1][i+1] = originArray[i*4+1];
-			rgbArray[2][i+2] = originArray[i*4+2];
+			rgbArray[0][i] = originArray[i*4+2]; // red
+			rgbArray[1][i] = originArray[i*4+1]; // green
+			rgbArray[2][i] = originArray[i*4]; // blue
 		}
 
 		return rgbArray;
@@ -85,10 +107,10 @@ public class ImageUtils {
 	public static WritableImage createImageFromRgbByteArray(byte[][] originArray, int width, int height) {
 		byte[] mergedArray = new byte[ originArray[0].length*3 ];
 
-		for (int i = 0, pos = 0; i < originArray.length; i++, pos = i * 3) {
-			mergedArray[i*4] = originArray[0][i]; // red
-			mergedArray[i*4+1] = originArray[1][i]; // green
-			mergedArray[i*4+2] = originArray[2][i]; // blue
+		for (int i = 0, pos = 0; i < originArray[0].length; i++, pos = i * 3) {
+			mergedArray[i*3] = originArray[0][i]; // red
+			mergedArray[i*3+1] = originArray[1][i]; // green
+			mergedArray[i*3+2] = originArray[2][i]; // blue
 		}
 
 		WritableImage image = new WritableImage(width, height);
@@ -127,7 +149,7 @@ public class ImageUtils {
 
 		int[] histogram = new int[originBand.length];
 		for (int i = 0; i < originBand.length; i++)
-			histogram[ Byte.toUnsignedInt(originBand[i]) ]++;
+			histogram[ byteToInteger(originBand[i]) ]++;
 
 		int[] cumulative = new int[histogram.length];
 		for (int i = 0; i < originBand.length; i++)
@@ -136,13 +158,13 @@ public class ImageUtils {
 		return cumulative;
 	}
 
-	public static int[] createNormalisedHistogramData(byte[] originBand) {
+	public static int[] createHistogramData(byte[] originBand) {
 		if (originBand == null)
 			throw new NullPointerException("Nigga you null?");
 
-		int[] histogram = new int[originBand.length];
+		int[] histogram = new int[256];
 		for (int i = 0; i < originBand.length; i++)
-			histogram[ Byte.toUnsignedInt(originBand[i]) ]++;
+			histogram[ byteToInteger(originBand[i]) ]++;
 
 		return histogram;
 	}
@@ -150,6 +172,7 @@ public class ImageUtils {
 	public static byte[][] adjustBrightness(byte[][] bands, int[] values) {
 		return BrightnessUtils.adjustBrightness(bands, values);
 	}
+
 	public static byte[] adjustBrightness(byte[] band, int value) {
 		return BrightnessUtils.adjustBrightness(band, value);
 	}
@@ -159,10 +182,37 @@ public class ImageUtils {
 			if (i % 4 == 0)
 				System.out.println( array[i-1] );
 			else
-				System.out.print( Byte.toUnsignedInt(array[i-1]) + " ");
+				System.out.print( byteToInteger(array[i-1]) + " ");
 	}
 
-	public static byte unsignedIntToByte(int intByte) {
-		return (byte)(intByte & 0xff);
+	/**
+	 * Adjusts an image to become normaldistributed, given an expected value and standard deviation value such that N(μ,σ)
+	 * @param bands Greyscale (identical bands) only
+	 * @param expectedValue The expected value mu, μ
+	 * @param stdDeviation The standard deviation sigma, σ
+	 * @return
+	 */
+	public static byte[][] imageNormalisation( byte[][] bands, int expectedValue, int stdDeviation) {
+		return MiscUtils.imageNormalisation(bands, expectedValue, stdDeviation);
+	}
+
+	public static ImageProcessor.ImageType getImageColorType(Image image) {
+		byte[] rgbValues = getImageAsByteArray(image);
+		for (int i = 0; i < rgbValues.length; i += 4)
+			if ( rgbValues[i] != rgbValues[i+1] || rgbValues[i] != rgbValues[i+2] )
+				return ImageProcessor.ImageType.RGB;
+
+		return ImageProcessor.ImageType.GREYSCALE;
+	}
+
+	/**
+	 * Returns a positive integer value based on the signed byte value.
+	 * The lowest return value will be 0 (byte -128) and highest 255 (byte 127).
+	 * Example, (byte)-100 will return (int)28;
+	 * @param b
+	 * @return
+	 */
+	public static int byteToInteger(byte b) {
+		return Byte.toUnsignedInt(b);
 	}
 }

@@ -6,16 +6,18 @@ import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 
-public class ImageStage extends Stage implements ImageObserver {
+public class ImageStage extends ImageFXStage implements ImageObserver {
 
 	Scene imageScene;
 	VBox imageContainer;
 	ImageView imagePlane;
 	Image image;
 
-	public ImageStage(Image image, int size) {
+	public ImageStage(Image image, int size, Color stageColor) {
+		super(stageColor);
 		this.image = image;
 
 		double ratio = image.getHeight() / image.getWidth();
@@ -47,8 +49,8 @@ public class ImageStage extends Stage implements ImageObserver {
 		setOnCloseRequest(closeRequest -> { nullAndClose(); });
 		show();
 	}
-	public ImageStage(Image image) {
-		this(image, 600);
+	public ImageStage(Image image, Color stageColor) {
+		this(image, 600, stageColor);
 	}
 
 	public void nullAndClose() {

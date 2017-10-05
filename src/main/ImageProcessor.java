@@ -1,41 +1,50 @@
 package main;
 
-import javafx.beans.property.ReadOnlyObjectProperty;
-import javafx.beans.property.ReadOnlyObjectWrapper;
+import javafx.beans.property.*;
 import javafx.scene.image.*;
 import javafx.scene.paint.Color;
-import main.imageUtils.BrightnessUtils;
+import main.imageUtils.ContrastUtils;
+import main.imageUtils.FilterUtils;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
 
 public class ImageProcessor implements ImageObserver {
 
 	protected ImageDetails imageDetails;
+
+	private WritableImage image;
+
+	/* Secondary variables */
+	private int imageWidth, imageHeight;
+	private double imageSizeFactor;
+	private PixelReader imageReader;
+	private PixelWriter imageWriter;
 
 	/* Display */
 	private ImageStage imageStage;
 
 	// Secondary tools
 	private Histogram histogram;
+	private BrightnessContrastStage brightnessContrastStage;
 
-	/* New Observable-centric variables */
-	private WritableImage image;
-	private int imageWidth, imageHeight;
-	private double imageSizeFactor;
-	private PixelReader imageReader;
-	private PixelWriter imageWriter;
+	public ImageProcessor(Image originImage, Iterator<Color> stageColorIterator) {
 
-	public ImageProcessor(Image originImage) {
+		// The order ensures all variables are initialised by the listener
 		imageDetails = new ImageDetails();
-
 		setImagePropertyListener(imageDetails.getImageReadOnlyProperty());
+		imageDetails.commitImage(
+				new WritableImage(
+						originImage.getPixelReader(), (int)originImage.getWidth(), (int)originImage.getHeight()));
 
-		imageDetails.setImage(originImage);
-
-		imageStage = new ImageStage(originImage);
+		imageStage = new ImageStage(originImage, stageColorIterator.next());
 		imageStage.setImagePropertyListener(imageDetails.getImageReadOnlyProperty());
+
 	}
-	public ImageProcessor(Image originImage, String filePath) {
-		this(originImage);
-		imageDetails.filePath = filePath;
+	public ImageProcessor(Image originImage, String filePath, Iterator<Color> stageColorIterator) {
+		this(originImage, stageColorIterator);
+		imageDetails.imageFilePath = filePath;
 	}
 
 	public void setImagePropertyListener(ReadOnlyObjectProperty<Image> observedImageProperty) {
@@ -50,8 +59,8 @@ public class ImageProcessor implements ImageObserver {
 	}
 
 
-	/* Mostly pointless shit */
-	public void flipImageOverX() {
+	/* Mostly pointless stuff */
+	void flipImageOverX() {
 		Color leftColor, rightColor;
 
 		WritableImage tmpImage = new WritableImage(imageWidth, imageHeight);
@@ -70,7 +79,7 @@ public class ImageProcessor implements ImageObserver {
 
 		imageDetails.setImage(tmpImage);
 	}
-	public void flipImageOverY() {
+	void flipImageOverY() {
 		Color topColor, bottomColor;
 
 		WritableImage tmpImage = new WritableImage(imageWidth, imageHeight);
@@ -90,7 +99,7 @@ public class ImageProcessor implements ImageObserver {
 
 		imageDetails.setImage(tmpImage);
 	}
-	public void flipImageOverXY() {
+	void flipImageOverXY() {
 
 		WritableImage tmpImage = new WritableImage(imageHeight, imageWidth);
 		PixelWriter tmpWriter = tmpImage.getPixelWriter();
@@ -101,7 +110,7 @@ public class ImageProcessor implements ImageObserver {
 
 		imageDetails.setImage(tmpImage);
 	}
-	public void frameImageWithBorder() {
+	void frameImageWithBorder() {
 
 		final int VAL = 50;
 		int xSpacing = VAL;
@@ -148,7 +157,7 @@ public class ImageProcessor implements ImageObserver {
 				tmpWriter.setColor(j, i, imageReader.getColor(i, j));
 
 	}
-	public void moveImageHorizontally(int percentage) {
+	void moveImageHorizontally(int percentage) {
 		if (percentage < 0 || percentage > 100)
 			throw new IllegalArgumentException();
 
@@ -169,49 +178,81 @@ public class ImageProcessor implements ImageObserver {
 		imageDetails.setImage(tmpImage);
 	}
 
-	/* The beginning of multithreading capabilities and shit */
-	public TiledImage splitImage() {
+	/* The beginning of multithreading capabilities and stuff */
+	TiledImage splitImage() {
 		return ImageUtils.splitImage(image);
 	}
-	public void displayImageTiles(TiledImage tiledImage) {
+	void displayImageTiles(TiledImage tiledImage) {
 		for ( Image img : tiledImage.getImageTiles() )
-			new ImageStage(img, 200);
+			new ImageStage(img, 200, Color.BLACK);
 	}
 
 
-	/* Useful shit */
-	public void showImageHistogram() {
-		histogram = new Histogram();
+	/* Useful stuff */
+	void showImageHistogram() {
+
+		histogram = new Histogram(this, Color.BLACK);
+
+		// TODO- new Thread?
+		byte[] greyscale = ImageUtils.convertFromBgraToAveragedGreyscale(ImageUtils.getImageAsByteArray(image));
+		histogram.populateHistogram(greyscale, "greyscale");
 
 		byte[][] bands = ImageUtils.splitRbgaToIndividualRbg( ImageUtils.getImageAsByteArray(image) );
 		String[] desc = {"red", "green", "blue"};
 
 		histogram.populateHistogram(bands, desc);
 
-		byte[] greyscale = ImageUtils.convertFromRbgaToAveragedGreyscale(ImageUtils.getImageAsByteArray(image));
-		histogram.populateHistogram(greyscale, "greyscale");
-
 		histogram.setImagePropertyListener(imageDetails.getImageReadOnlyProperty());
 	}
-
-	/* Brightness shit */
-	public void adjustBrightness(int amount) {
-		byte[][] theByteThing = ImageUtils.splitRbgaToIndividualRbg(ImageUtils.getImageAsByteArray(image));
-		int[] theAmountThing = {amount, amount, amount};
-
-		theByteThing = ImageUtils.adjustBrightness(theByteThing, theAmountThing);
-		imageDetails.setImage(ImageUtils.createImageFromRgbByteArray(theByteThing, imageWidth, imageHeight));
+	void showBrightnessContrastStage() {
+		if (brightnessContrastStage == null)
+			brightnessContrastStage = new BrightnessContrastStage(this, Color.BLACK);
 	}
 
+	/* Brightness stuff */
+	void adjustBrightness(int amount) {
+		int[] theAmountThing = {amount, amount, amount};
+
+		byte[][] theNewByteThing = ImageUtils.adjustBrightness(imageDetails.getOriginalImageRgbArray(), theAmountThing);
+		imageDetails.setImage(ImageUtils.createImageFromRgbByteArray(theNewByteThing, imageWidth, imageHeight));
+	}
+
+	/* Contrast stuff */
+	void autoContrast() {
+		byte[][] newByteArray = ContrastUtils.autoContrast(imageDetails.getOriginalImageRgbArray());
+		imageDetails.setImage(ImageUtils.createImageFromRgbByteArray(newByteArray, imageWidth, imageHeight));
+	}
+	void manualAutoContrast(int percentage) {
+		byte[][] newByteArray = ContrastUtils.modifiedAutoContrast(imageDetails.getOriginalImageRgbArray(), percentage);
+		imageDetails.setImage(ImageUtils.createImageFromRgbByteArray(newByteArray, imageWidth, imageHeight));
+	}
+	void manualThreshold(double low, double high) {
+		byte[][] newByteArray = ContrastUtils.manualThreshold(imageDetails.getOriginalImageRgbArray(), low, high);
+		imageDetails.setImage(ImageUtils.createImageFromRgbByteArray(newByteArray, imageWidth, imageHeight));
+	}
+	void imageNormalisation(int expectedValue, int standardDeviation) {
+		byte[][] newByteArray = ImageUtils.imageNormalisation(imageDetails.getOriginalImageRgbArray(), expectedValue, standardDeviation);
+		imageDetails.setImage(ImageUtils.createImageFromRgbByteArray(newByteArray, imageWidth, imageHeight));
+	}
+	void smoothImage(int filterLength, int filterHeight) {
+		byte[][] newByteArray = FilterUtils.smooth(imageDetails.getOriginalImageRgbArray(), imageWidth, 3, 3);
+		imageDetails.setImage(ImageUtils.createImageFromRgbByteArray(newByteArray, imageWidth, imageHeight));
+	}
 
 	/* Utility */
 	private int increment(int current, int max) {
 		return (++current >= max) ? 0 : current;
 	}
 
-	public void nullAndClose() {
-		imageStage.nullAndClose();
-		imageStage = null;
+	void nullAndClose() {
+		if (imageStage != null) {
+			imageStage.nullAndClose();
+			imageStage = null;
+		}
+		if (histogram != null) {
+			histogram.close();
+			histogram = null;
+		}
 	}
 
 	/**
@@ -224,35 +265,45 @@ public class ImageProcessor implements ImageObserver {
 		private ReadOnlyObjectWrapper<Image> currentImageProperty;
 
 		/* Shit */
-		private WritableImage image;
-		private WritableImage backupImage;
+		private WritableImage originalImage; // TODO- Pull out of ImageProcessor, should not at any point be directly accessible.
+		private WritableImage processingImage; // TODO- Should not be directly accessible either.
 
+		private byte[] originalImageByteArray;
+		private byte[][] originalImageRgbArray;
 
 		/* Details */
-		private String filePath;
-		private ImageType type;
+		private String imageFilePath; // TODO- Pass from RootStage upon creation
+		private ImageType imageType;
+
+		public int imageWidth, imageHeight;
 
 		public ImageDetails() {
 			imageStateProperty = new ReadOnlyObjectWrapper<>(ImageStatus.INITIALISING);
-			currentImageProperty = new ReadOnlyObjectWrapper<Image>(null);
+			currentImageProperty = new ReadOnlyObjectWrapper<>(null);
 		}
 		public ImageDetails(Image image) {
-			this.image = new WritableImage( image.getPixelReader(), (int)image.getWidth(), (int)image.getHeight() );
+			this.originalImage = new WritableImage( image.getPixelReader(), (int)image.getWidth(), (int)image.getHeight() );
 			sharedConstructorTasks();
 		}
 		public ImageDetails(int width, int height) {
-			this.image = new WritableImage( width, height );
+			this.originalImage = new WritableImage( width, height );
 			sharedConstructorTasks();
 		}
 
 		private void sharedConstructorTasks() {
 			imageStateProperty = new ReadOnlyObjectWrapper<>(ImageStatus.INITIALISING);
-			currentImageProperty = new ReadOnlyObjectWrapper<>(image);
+			currentImageProperty = new ReadOnlyObjectWrapper<>(originalImage);
 
-			// TODO- Utilize ImageUtils to judge the content of the image; create details.
+			originalImageByteArray = ImageUtils.getImageAsByteArray(originalImage);
+			originalImageRgbArray = ImageUtils.splitRbgaToIndividualRbg(originalImageByteArray);
+
+			imageType = ImageUtils.getImageColorType(originalImage);
+			imageWidth = (int)processingImage.getWidth();
+			imageHeight = (int)processingImage.getHeight();
 
 			setProcessingProperty(ImageStatus.AVAILABLE);
 		}
+
 		/**
 		 *
 		 * @return the read only property of the Image's status
@@ -263,13 +314,12 @@ public class ImageProcessor implements ImageObserver {
 		public ReadOnlyObjectProperty<Image> getImageReadOnlyProperty() {
 			return currentImageProperty.getReadOnlyProperty();
 		}
-
 		/**
 		 * Only to be used for displaying/updating the image, [b]not processing[/b].
 		 * @return a type-forced Image
 		 */
 		public Image getImage() {
-			return image;
+			return originalImage;
 		}
 
 		/**
@@ -279,19 +329,48 @@ public class ImageProcessor implements ImageObserver {
 		public WritableImage getImageForProcessing() {
 			if (imageStateProperty.getValue() == ImageStatus.AVAILABLE) {
 				imageStateProperty.set(ImageStatus.PROCESSING);
-				backupImage = image;
-				return image;
+				return processingImage;
 			}
 			return null;
+		}
+
+		private WritableImage getOriginalImage() {
+			return new WritableImage(originalImage.getPixelReader(), (int)originalImage.getWidth(), (int)originalImage.getHeight());
+		}
+		private byte[] getOriginalImageByteArray() {
+			return Arrays.copyOf(originalImageByteArray, originalImageByteArray.length);
+		}
+
+		private byte[][] getOriginalImageRgbArray() {
+			byte[][] returnArray = new byte[originalImageRgbArray.length][0];
+			for (int i = 0; i < originalImageRgbArray.length; i++)
+				returnArray[i] = Arrays.copyOf(originalImageRgbArray[i], originalImageRgbArray[i].length);
+
+			return returnArray;
 		}
 
 		public void setImage(Image newImage) { // TODO- Necessary?
 			setImage(new WritableImage(newImage.getPixelReader(), (int)newImage.getWidth(), (int)newImage.getHeight()));
 		}
 
-		public void setImage(WritableImage newImage) {
-			image = newImage;
-			currentImageProperty.set(image);
+		synchronized private void setImage(WritableImage newImage) {
+			processingImage = newImage;
+			imageWidth = (int)processingImage.getWidth();
+			imageHeight = (int)processingImage.getHeight();
+
+			currentImageProperty.set(processingImage);
+			imageStateProperty.set(ImageStatus.AVAILABLE);
+		}
+		synchronized private void commitImage(WritableImage newImage) {
+			originalImage = processingImage = newImage;
+			imageWidth = (int)processingImage.getWidth();
+			imageHeight = (int)processingImage.getHeight();
+
+
+			originalImageByteArray = ImageUtils.getImageAsByteArray(originalImage);
+			originalImageRgbArray = ImageUtils.splitRbgaToIndividualRbg(originalImageByteArray);
+
+			currentImageProperty.set(originalImage);
 			imageStateProperty.set(ImageStatus.AVAILABLE);
 		}
 
@@ -300,6 +379,7 @@ public class ImageProcessor implements ImageObserver {
 		private void setProcessingProperty(ImageStatus status) {
 			imageStateProperty.set(status);
 		}
+
 	}
 
 	public enum ImageStatus {

@@ -23,7 +23,9 @@ import javafx.stage.Stage;
 import java.util.HashMap;
 import java.util.Map;
 
-public class Histogram extends Stage implements ImageObserver {
+public class Histogram extends ImageFXStage implements ImageObserver {
+
+	private ImageProcessor ip;
 
 	private VBox root;
 	private Pane canvasPane;
@@ -32,12 +34,17 @@ public class Histogram extends Stage implements ImageObserver {
 
 	private ComboBox histogramSelector;
 
+	private String previouslySelectedBand;
+
 	private final int CANVAS_HEIGHT = 200;
-	private final int CANVAS_WIDTH = 512; // Only multiples of 256. This is linked to canvas painters!
+	private final int CANVAS_WIDTH = 512; // Only multiples of 256. This is linked (but not referenced) to canvas painters!
 	private final int SCALE_REPRESENTATION_HEIGHT = 20;
 
-	public Histogram() {
-		super();
+	public Histogram(ImageProcessor ip, Color stageColor) {
+		super(stageColor);
+
+		this.ip = ip;
+		previouslySelectedBand = "empty";
 
 		histogramSections = new HashMap<>();
 		canvasPane = new Pane();
@@ -45,8 +52,8 @@ public class Histogram extends Stage implements ImageObserver {
 
 		// Combo Box
 		histogramBands = FXCollections.observableArrayList();
-		histogramBands.add("empty");
-		histogramSections.put("empty", new HistogramSection());
+		histogramBands.add(previouslySelectedBand);
+		histogramSections.put(previouslySelectedBand, new HistogramSection());
 
 		histogramSelector = new ComboBox(histogramBands);
 		histogramSelector.valueProperty().setValue(histogramBands.get(0));
@@ -59,6 +66,8 @@ public class Histogram extends Stage implements ImageObserver {
 					if (histogramSections.get(newValue).drawn) {
 						canvasPane.getChildren().clear();
 						canvasPane.getChildren().add(histogramSections.get(newValue));
+
+						previouslySelectedBand = (String)newValue;
 					}
 				}
 			}
@@ -83,7 +92,7 @@ public class Histogram extends Stage implements ImageObserver {
 		if (values == null || band == null)
 			throw new IllegalArgumentException("Nigga you null?");
 
-		String stringOne = "Normalised - ".concat(band.substring(0,1).toUpperCase().concat(band.substring(1)));
+		String stringOne = "Original - ".concat(band.substring(0,1).toUpperCase().concat(band.substring(1)));
 		String stringTwo = "Cumulative - ".concat(band.substring(0,1).toUpperCase().concat(band.substring(1)));
 
 		if (!addToHistogramSectionMap(stringOne)) {
@@ -97,25 +106,27 @@ public class Histogram extends Stage implements ImageObserver {
 		HistogramSection normalisedTmp = histogramSections.get(stringOne);
 		HistogramSection cumulativeTmp = histogramSections.get(stringTwo);
 
-		int[] normalisedhistogram = ImageUtils.createNormalisedHistogramData(values);
+		int[] originalHistogram = ImageUtils.createHistogramData(values);
 		int[] cumulativeHistogram = ImageUtils.createCumulativeHistogramData(values);
 
 		int highestNormalisedValue = 0;
 		int highestCumulativeValue = cumulativeHistogram[255];
 
-		for (int i : normalisedhistogram)
+		for (int i : originalHistogram)
 			if (i > highestNormalisedValue)
 				highestNormalisedValue = i;
 
 
-		double columnRatioNormalised = CANVAS_HEIGHT * 0.9 / highestNormalisedValue;
-		double columnRatioCumulative = CANVAS_HEIGHT * 0.9 / highestCumulativeValue;
+		double columnRatioNormalised = CANVAS_HEIGHT * 1.0 / highestNormalisedValue;
+		double columnRatioCumulative = CANVAS_HEIGHT * 1.0 / highestCumulativeValue;
 
 		normalisedTmp.pixelPainter.setLineWidth(2);
+		normalisedTmp.pixelPainter.setStroke(Color.DARKGRAY);
 		cumulativeTmp.pixelPainter.setLineWidth(2);
+		cumulativeTmp.pixelPainter.setStroke(Color.DARKGRAY);
 
-		for (int i = 0; i < normalisedhistogram.length; i++)
-			normalisedTmp.pixelPainter.strokeLine( i*2, CANVAS_HEIGHT, i*2, (CANVAS_HEIGHT - 1) - (normalisedhistogram[i] * columnRatioNormalised) );
+		for (int i = 0; i < originalHistogram.length; i++)
+			normalisedTmp.pixelPainter.strokeLine( i*2, CANVAS_HEIGHT, i*2, (CANVAS_HEIGHT - 1) - (originalHistogram[i] * columnRatioNormalised) );
 
 		normalisedTmp.drawn = true;
 
@@ -143,6 +154,7 @@ public class Histogram extends Stage implements ImageObserver {
 		cumulativeTmp.createBandScaleRepresentation(bandNumber);
 		normalisedTmp.createBandScaleRepresentation(bandNumber);
 
+		histogramSelector.valueProperty().setValue(histogramBands.get(0));
 	}
 
 	private boolean addToHistogramSectionMap(String band) {
@@ -156,8 +168,6 @@ public class Histogram extends Stage implements ImageObserver {
 
 		histogramSections.put(band, new HistogramSection());
 		histogramBands.add(band);
-
-		histogramSelector.valueProperty().setValue(histogramBands.get(0));
 
 		return true;
 	}
@@ -193,18 +203,22 @@ public class Histogram extends Stage implements ImageObserver {
 				/* Create new workable data
 				* Frees the main thread from doing background calculations */
 				byte[] imageByteData = ImageUtils.getImageAsByteArray( observedImageProperty.getValue() );
-				byte[] newGreyscaleBand = ImageUtils.convertFromRbgaToAveragedGreyscale(imageByteData);
+				byte[] newGreyscaleBand = ImageUtils.convertFromBgraToAveragedGreyscale(imageByteData);
 				byte[][] newRgbBands = ImageUtils.splitRbgaToIndividualRbg( imageByteData );
 				String[] bands = {"Red", "Green", "Blue"};
 
-				/* Clear all old references */
 				Platform.runLater(() -> {
+					/* Clear all old references */
 					histogramSections.clear();
 					histogramBands.clear();
 					canvasPane.getChildren().clear();
 
 					populateHistogram(newGreyscaleBand, "Greyscale");
 					populateHistogram(newRgbBands, bands);
+
+					if (!previouslySelectedBand.equals(histogramSelector.valueProperty().getName()))
+						if (histogramBands.contains(previouslySelectedBand))
+							histogramSelector.valueProperty().setValue(previouslySelectedBand);
 				});
 
 
