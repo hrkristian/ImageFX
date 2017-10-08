@@ -8,7 +8,7 @@ public class GeneralUtils {
 
         return null;
     }
-    public static double getGaussianNumber(int expectedValue, int standardDeviation, int value) {
+    public static double getNormalDistributedNumber(int expectedValue, int standardDeviation, int value) {
 
         double eExponent = -( pow(value - expectedValue, 2) / ( 2 * pow(standardDeviation, 2) ) );
 

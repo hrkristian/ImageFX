@@ -238,6 +238,10 @@ public class ImageProcessor implements ImageObserver {
 		byte[][] newByteArray = FilterUtils.smooth(imageDetails.getOriginalImageRgbArray(), imageWidth, 3, 3);
 		imageDetails.setImage(ImageUtils.createImageFromRgbByteArray(newByteArray, imageWidth, imageHeight));
 	}
+	void weightedMedianFiltering() {
+		byte[][] newByteArray = FilterUtils.weightedMedianFilter(imageDetails.getOriginalImageRgbArray(), imageWidth, 5);
+		imageDetails.setImage(ImageUtils.createImageFromRgbByteArray(newByteArray, imageWidth, imageHeight));
+	}
 
 	/* Utility */
 	private int increment(int current, int max) {

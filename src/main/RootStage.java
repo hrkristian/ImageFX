@@ -13,7 +13,6 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Text;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-import main.imageUtils.GeneralUtils;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -49,6 +48,7 @@ public class RootStage extends Stage {
     private Button imageFileChooserButton;
     private Button createGaussianDistributedImage;
     private Button testMyShitButton;
+    private TextField testMyShitInput;
 
     private Text statusMessage;
     private VBox statusPane;
@@ -100,9 +100,10 @@ public class RootStage extends Stage {
         imageFileChooserButton = new Button("Choose file:");
         createGaussianDistributedImage = new Button("Gaussian Distributed Image");
         testMyShitButton = new Button("Testing, testing, testing");
+        testMyShitInput = new TextField();
 
         openTabPaneTop.getChildren().addAll(imageFileChooserButton, createGaussianDistributedImage);
-        openTabPaneBottom.getChildren().addAll(testMyShitButton);
+        openTabPaneBottom.getChildren().addAll(testMyShitButton, testMyShitInput);
 
         tabs.getTabs().addAll(openTab, toolTab, infoTab, pluginTab);
 
@@ -135,7 +136,7 @@ public class RootStage extends Stage {
     private void setButtonActions() {
 
         createGaussianDistributedImage.setOnAction(gaussians -> {
-            imageProcessor = new ImageProcessor(ImageUtils.createGaussianDistributedImage(500), stageColorIterator);
+            imageProcessor = new ImageProcessor(ImageUtils.createGaussianDistributedImage(25), stageColorIterator);
             toolTab.newImageTab(imageProcessor);
             infoTab.setImageStatusPropertyListener(imageProcessor.imageDetails.getimageStateReadOnlyProperty());
         });
@@ -145,17 +146,9 @@ public class RootStage extends Stage {
         });
 
         testMyShitButton.setOnAction(test -> {
-            double sum = 0;
-            for (int i = -5; i <= 5; i++) {
-                double returned = GeneralUtils.getGaussianNumber(0, 2, i);
-                sum += returned;
-                System.out.println(
-                        "Value given: " + i +
-                        "  \tValue returned: " + returned +
-                        "  \tConverted value: " + (returned * 5)
-                );
-            }
-            System.out.println("\n--------------------\nSum: " + sum);
+
+            imageProcessor.weightedMedianFiltering();
+
         });
 
     }
