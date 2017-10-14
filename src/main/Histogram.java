@@ -27,7 +27,7 @@ public class Histogram extends ImageFXStage implements ImageObserver {
 
 	private ImageProcessor ip;
 
-	private VBox root;
+//	private VBox rootPane;
 	private Pane canvasPane;
 	private ObservableList<String> histogramBands;
 	private HashMap<String, HistogramSection> histogramSections;
@@ -41,14 +41,14 @@ public class Histogram extends ImageFXStage implements ImageObserver {
 	private final int SCALE_REPRESENTATION_HEIGHT = 20;
 
 	public Histogram(ImageProcessor ip, Color stageColor) {
-		super(stageColor);
+		super(stageColor, 600, 350);
 
 		this.ip = ip;
 		previouslySelectedBand = "empty";
 
 		histogramSections = new HashMap<>();
 		canvasPane = new Pane();
-		root = new VBox();
+//		rootPane = new VBox();
 
 		// Combo Box
 		histogramBands = FXCollections.observableArrayList();
@@ -76,15 +76,23 @@ public class Histogram extends ImageFXStage implements ImageObserver {
 		Text header = new Text("Histogram");
 		header.setFont(new Font(20));
 
-		root.getChildren().add(header);
-		root.getChildren().add(histogramSelector);
-		root.getChildren().add(canvasPane);
+		HBox headerPane = new HBox(header), selectorPane = new HBox(histogramSelector);
+		headerPane.setBackground(new Background(new BackgroundFill(stageColor, null, null)));
+		headerPane.setPadding(new Insets(10, 10, 10 ,10));
+		selectorPane.setPadding(new Insets(0, 10, 0, 10));
+		canvasPane.setPadding(new Insets(0, 10, 10, 10));
 
-		root.setPadding(new Insets(10));
-		root.setSpacing(10);
+		rootPane.getChildren().add(headerPane);
+		rootPane.getChildren().add(selectorPane);
+		rootPane.getChildren().add(canvasPane);
+
+//		rootPane.setPadding(new Insets(10));
+		rootPane.setSpacing(10);
+		rootPane.requestLayout();
 
 		setResizable(false);
-		setScene(new Scene(root, 600, 350));
+
+//		setScene(new Scene(rootPane, 600, 350));
 		show();
 	}
 

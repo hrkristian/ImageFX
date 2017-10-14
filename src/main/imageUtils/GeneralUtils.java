@@ -17,4 +17,8 @@ public class GeneralUtils {
 
         return expressionFactorOne * expressionFactorTwo;
     }
+
+    public static boolean checkRgbBandLengths(byte[][] bands) {
+        return (bands[0].length == bands[1].length) && (bands[0].length == bands[2].length);
+    }
 }

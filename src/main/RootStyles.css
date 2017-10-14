@@ -1,17 +1,52 @@
+* {
+    -fx-fit-to-width: true;
+}
 .tab-pane {
-    -fx-min-width: 100%;
+    -fx-tab-min-width: 100px;
 }
 
-.tab {
-    -fx-min-width: 100%;
+.tab-pane .tab-header-area .tab-header-background {
+    -fx-opacity: 0.5;
+}
+
+.tab-pane .tab {
+    -fx-background-color: #cccccc;
     -fx-font-weight: bold;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
 }
 
-.infoText {
-    -fx-font-family: monospace;
+.tab-pane .tab:selected {
+    -fx-background-color: #888888; /* 3c3c3c */
+    -fx-fill: #ffffff;
+    -fx-focus-fill: none;
+}
+
+.tab:selected .tab-label {
+    -fx-text-fill: #ffffff;
 }
 
 .toolTabRootPane {
     -fx-padding: 10px;
     -fx-text-alignment: center;
+}
+
+.root-scroll-legend {
+    -fx-min-height: 50px;
+    -fx-max-height: 50px;
+    -fx-min-width: 300px;
+    -fx-max-width: 300px;
+}
+
+.root-scroll-legend-container {
+    -fx-min-width: 300px;
+    -fx-background-color: #aaaaaa;
+}
+.infoPaneContent {  }
+.infoTabTextContainer {
+    -fx-font-family: monospace;
+    -fx-fit-to-width: true;
+}
+.darkNode * {
+    -fx-fill: #ffffff;
 }

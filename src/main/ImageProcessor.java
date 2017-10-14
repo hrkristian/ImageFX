@@ -1,5 +1,6 @@
 package main;
 
+import javafx.application.Platform;
 import javafx.beans.property.*;
 import javafx.scene.image.*;
 import javafx.scene.paint.Color;
@@ -24,12 +25,14 @@ public class ImageProcessor implements ImageObserver {
 
 	/* Display */
 	private ImageStage imageStage;
+	Color stageColor;
 
 	// Secondary tools
 	private Histogram histogram;
 	private BrightnessContrastStage brightnessContrastStage;
 
 	public ImageProcessor(Image originImage, Iterator<Color> stageColorIterator) {
+		stageColor = stageColorIterator.next();
 
 		// The order ensures all variables are initialised by the listener
 		imageDetails = new ImageDetails();
@@ -38,10 +41,11 @@ public class ImageProcessor implements ImageObserver {
 				new WritableImage(
 						originImage.getPixelReader(), (int)originImage.getWidth(), (int)originImage.getHeight()));
 
-		imageStage = new ImageStage(originImage, stageColorIterator.next());
-		imageStage.setImagePropertyListener(imageDetails.getImageReadOnlyProperty());
 
+		imageStage = new ImageStage(originImage, stageColor);
+		imageStage.setImagePropertyListener(imageDetails.getImageReadOnlyProperty());
 	}
+
 	public ImageProcessor(Image originImage, String filePath, Iterator<Color> stageColorIterator) {
 		this(originImage, stageColorIterator);
 		imageDetails.imageFilePath = filePath;
@@ -191,7 +195,7 @@ public class ImageProcessor implements ImageObserver {
 	/* Useful stuff */
 	void showImageHistogram() {
 
-		histogram = new Histogram(this, Color.BLACK);
+		histogram = new Histogram(this, stageColor);
 
 		// TODO- new Thread?
 		byte[] greyscale = ImageUtils.convertFromBgraToAveragedGreyscale(ImageUtils.getImageAsByteArray(image));
@@ -235,12 +239,25 @@ public class ImageProcessor implements ImageObserver {
 		imageDetails.setImage(ImageUtils.createImageFromRgbByteArray(newByteArray, imageWidth, imageHeight));
 	}
 	void smoothImage(int filterLength, int filterHeight) {
-		byte[][] newByteArray = FilterUtils.smooth(imageDetails.getOriginalImageRgbArray(), imageWidth, 3, 3);
-		imageDetails.setImage(ImageUtils.createImageFromRgbByteArray(newByteArray, imageWidth, imageHeight));
+		byte[][] oldByteArray= imageDetails.getOriginalImageRgbArray();
+		new Thread(() -> {
+			byte[][] newByteArray = FilterUtils.smooth(oldByteArray, imageWidth, 3, 3);
+				Image newImage = ImageUtils.createImageFromRgbByteArray(newByteArray, imageWidth, imageHeight);
+				Platform.runLater(()->{ imageDetails.setImage(newImage); });
+		}).start();
+
 	}
-	void weightedMedianFiltering() {
-		byte[][] newByteArray = FilterUtils.weightedMedianFilter(imageDetails.getOriginalImageRgbArray(), imageWidth, 5);
-		imageDetails.setImage(ImageUtils.createImageFromRgbByteArray(newByteArray, imageWidth, imageHeight));
+	void weightedMedianFiltering(int filterSize) {
+		byte[][] oldByteArray= imageDetails.getOriginalImageRgbArray();
+		new Thread(() -> {
+			byte[][] newByteArray = FilterUtils.weightedMedianFilter(oldByteArray, imageWidth, filterSize);
+			Image newImage = ImageUtils.createImageFromRgbByteArray(newByteArray, imageWidth, imageHeight);
+			Platform.runLater(()->{ imageDetails.setImage(newImage); });
+		}).start();
+	}
+	void pseudoMedianFiltering(int filterSize) {
+		byte[][] newByteArray = FilterUtils.pseudoMedianFilter(imageDetails.getOriginalImageRgbArray(), imageWidth, filterSize);
+		imageDetails.commitImage(ImageUtils.createImageFromRgbByteArray(newByteArray, imageWidth, imageHeight));
 	}
 
 	/* Utility */
@@ -249,6 +266,7 @@ public class ImageProcessor implements ImageObserver {
 	}
 
 	void nullAndClose() {
+		imageDetails.setProcessingProperty(ImageStatus.CLOSING);
 		if (imageStage != null) {
 			imageStage.nullAndClose();
 			imageStage = null;
@@ -342,15 +360,23 @@ public class ImageProcessor implements ImageObserver {
 			return new WritableImage(originalImage.getPixelReader(), (int)originalImage.getWidth(), (int)originalImage.getHeight());
 		}
 		private byte[] getOriginalImageByteArray() {
-			return Arrays.copyOf(originalImageByteArray, originalImageByteArray.length);
+			if (imageStateProperty.getValue() == ImageStatus.AVAILABLE) {
+				imageStateProperty.set(ImageStatus.PROCESSING);
+				return Arrays.copyOf(originalImageByteArray, originalImageByteArray.length);
+			}
+			return null;
 		}
 
 		private byte[][] getOriginalImageRgbArray() {
-			byte[][] returnArray = new byte[originalImageRgbArray.length][0];
-			for (int i = 0; i < originalImageRgbArray.length; i++)
-				returnArray[i] = Arrays.copyOf(originalImageRgbArray[i], originalImageRgbArray[i].length);
+			if (imageStateProperty.getValue() == ImageStatus.AVAILABLE) {
+				imageStateProperty.set(ImageStatus.PROCESSING);
+				byte[][] returnArray = new byte[originalImageRgbArray.length][0];
+				for (int i = 0; i < originalImageRgbArray.length; i++)
+					returnArray[i] = Arrays.copyOf(originalImageRgbArray[i], originalImageRgbArray[i].length);
 
-			return returnArray;
+				return returnArray;
+			}
+			return null;
 		}
 
 		public void setImage(Image newImage) { // TODO- Necessary?

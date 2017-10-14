@@ -1,5 +1,7 @@
 package main.imageUtils;
 
+import java.util.Arrays;
+
 @SuppressWarnings("Duplicates")
 
 public class FilterUtils {
@@ -13,6 +15,9 @@ public class FilterUtils {
 	 * @return An array representation of the new picture
 	 */
 	public static byte[][] smooth(byte[][] bands, int imageWidth, int filterWidth, int filterHeight) {
+		if (!GeneralUtils.checkRgbBandLengths(bands))
+			throw new IllegalArgumentException("The bands are not of equal length.");
+
 		byte[][] newBands = new byte[bands.length][bands[0].length];
 
 		for (int i = 0; i < bands.length; i++)
@@ -73,6 +78,11 @@ public class FilterUtils {
 	}
 
 	public static byte[][] weightedMedianFilter(byte[][] bands, int imageWidth, int filterSize) {
+		if (!GeneralUtils.checkRgbBandLengths(bands))
+			throw new IllegalArgumentException("The bands are not of equal length.");
+		if (filterSize % 2 != 1 || filterSize < 3)
+			throw new IllegalArgumentException("The filter size must be an off value greater than 3");
+
 		byte[][] newBands = new byte[bands.length][bands[0].length];
 		for (int i = 0; i < bands.length; i++)
 			newBands[i] = weightedMedianFilter(bands[i], imageWidth, filterSize);
@@ -80,6 +90,13 @@ public class FilterUtils {
 		return newBands;
 	}
 	private static byte[] weightedMedianFilter(byte[] band, int imageWidth, int filterSize) {
+
+		try {
+			System.out.println("Sleeping...");
+			Thread.sleep(5000);
+			System.out.println("Continuing.");
+		} catch (InterruptedException e) {}
+
 		byte[] newBand = new byte[band.length];
 
 		int[][] matrix = weightedMatrix(filterSize);
@@ -92,13 +109,10 @@ public class FilterUtils {
 		for (int i = 0; i < imageHeight; i++)
 			for (int j = 0; j < imageWidth; j++)
 				valueBand[i][j] = Byte.toUnsignedInt( band[ (i * imageWidth) + j ] );
-
-		StringBuilder builder = new StringBuilder("Weights total:\n");
+		// Values are correct.
 
 		for (int y = 0; y < imageHeight; y++) {
 
-			// Takes care of edge cases, such that the loop does not go out of bounds.
-			// As in, from where to where in the MATRIX
 			final int yMatrixStart = (y < offset) ? -offset + ( offset - y )  : -offset;
 			final int yMatrixEnd = (y < imageHeight - offset) ? offset : imageHeight - y - 1;
 
@@ -107,38 +121,26 @@ public class FilterUtils {
 				final int xMatrixStart = (x < offset) ? -offset + (offset - x) : -offset;
 				final int xMatrixEnd = (x < imageWidth - offset) ? offset : imageWidth - x - 1;
 
-				// The total sum of the weights must be known
 				int weightsTotal = 0;
 				for (int i = yMatrixStart; i <= yMatrixEnd; i++)
 					for (int j = xMatrixStart; j <= xMatrixEnd; j++)
 						weightsTotal += matrix[i + offset][j + offset];
 
-				// The array must be large enough to hold all values
 				int[] valueStore = new int[weightsTotal];
 				int valueStoreCounter = 0;
 
-				builder.append('[');
-//				builder.append(valueBand[y][x]);
-//				builder.append('-');builder.append('>');
-
-				int prevCounter = valueStoreCounter;
-				for (int i = yMatrixStart; i < yMatrixEnd; i++) {
-					for (int j = xMatrixStart; j < xMatrixEnd; j++) {
+				for (int i = yMatrixStart; i <= yMatrixEnd; i++) {
+					for (int j = xMatrixStart; j <= xMatrixEnd; j++) {
 
 						for (int k = 0; k < matrix[i + offset][j + offset]; k++) {
 							int value = valueBand[y + i][x + j];
 							valueStore[valueStoreCounter] = value;
 							valueStoreCounter++;
 						}
-
 					}
 				}
-				for (int i = prevCounter; i < valueStore.length; i++) {
-					builder.append(valueStore[i]);
-					builder.append(' ');
-				}
-				builder.append(']');
-				builder.append(' ');
+
+				Arrays.sort(valueStore);
 
 				int theMedianValue;
 				if (weightsTotal % 2 == 0)
@@ -146,14 +148,83 @@ public class FilterUtils {
 				else
 					theMedianValue = valueStore[valueStore.length / 2];
 
-				newBand[y*imageHeight + x] = (byte)theMedianValue;
+				newBand[y*imageWidth + x] = (byte)theMedianValue;
+
 			}
-			builder.append('\n');
 		}
-		System.out.println(builder);
 		return newBand;
 	}
 
+	public static byte[][] pseudoMedianFilter(byte [][] bands, int imageWidth, int filterSize) {
+		if (!GeneralUtils.checkRgbBandLengths(bands))
+			throw new IllegalArgumentException("The bands are not of equal length.");
+		if (filterSize % 2 != 1 || filterSize < 3)
+			throw new IllegalArgumentException("The filter size must be an off value greater than 3");
+
+		byte[][] newBands = new byte[bands.length][bands[0].length];
+		for (int i = 0; i < bands.length; i++)
+			newBands[i] = pseudoMedianFilter(bands[i], imageWidth, filterSize);
+
+		return newBands;
+	}
+	private static byte[] pseudoMedianFilter(byte [] band, int imageWidth, int filterSize) {
+		byte[] newBand = new byte[band.length];
+
+		int imageHeight = band.length / imageWidth;
+		int offset = filterSize / 2;
+		final int[] horizontalFilter = new int[filterSize];
+		final int[] verticalFilter = new int[filterSize];
+
+		{
+			int[][] throwAwayMatrix = weightedMatrix(filterSize);
+			for (int i = 0; i < filterSize; i++) {
+				horizontalFilter[i] = throwAwayMatrix[offset][i];
+				verticalFilter[i] = throwAwayMatrix[i][offset];
+			} // There's no point having them separate, it's just future-proofing.
+		}
+
+		for (int y = 0; y < imageHeight; y++) {
+			for (int x = 0; x < imageWidth; x++) { // Parses horizontally
+				int filterStart = (x < offset) ? -offset + ( offset - x ) : -offset;
+				int filterEnd = (x > imageWidth - offset) ? imageWidth - x - 1 : offset;
+
+				int weightsTotal = 0;
+				for (int i = filterStart; i <= filterEnd; i++)
+						weightsTotal += horizontalFilter[i + offset];
+
+				int valueStoreCounter = 0;
+				int[] valueStore = new int[weightsTotal];
+				for (int i = filterStart; i <= filterEnd; i++)
+					valueStore[valueStoreCounter++] = Byte.toUnsignedInt(band[y * imageWidth + x]);
+
+				Arrays.sort(valueStore);
+
+				if (weightsTotal % 2 == 0)
+					band[y * imageWidth + x ] = (byte)((valueStore[weightsTotal / 2] + valueStore[weightsTotal / 2]) / 2);
+				else
+					band[y * imageWidth + x ] = (byte)valueStore[weightsTotal / 2];
+			}
+		}
+		for (int x = 0; x < imageWidth; x++) {
+			for (int y = 0; y < imageHeight; y++) { // Parses vertically
+				int filterStart = (y < offset) ? -offset + ( offset - y ) : -offset;
+				int filterEnd = (y > imageHeight - offset) ? imageHeight - y - 1 : offset;
+
+				int weightsTotal = 0;
+				for (int i = filterStart; i <= filterEnd; i++)
+					weightsTotal += horizontalFilter[i + offset];
+
+				int valueStoreCounter = 0;
+				int[] valueStore = new int[weightsTotal];
+				for (int i = filterStart; i <= filterEnd; i++) {
+
+				}
+			}
+		}
+
+
+		return newBand;
+	}
 
 	/**
 	 * Returns a weighted matrix of the given size.

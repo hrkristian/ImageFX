@@ -5,6 +5,8 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.TextArea;
+import javafx.scene.layout.Background;
+import javafx.scene.layout.BackgroundFill;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Text;
@@ -22,14 +24,40 @@ import javafx.stage.Stage;
  * Instead, a high enough amount of unique linearly chosen colors will be used. Even just using the major colors
  * should offer enough unique colors.
  */
-public abstract class ImageFXStage extends Stage {
-	private Color stageColor;
+abstract class ImageFXStage extends Stage {
 
-	public ImageFXStage(Color stageColor) {
+	protected Color stageColor;
+	protected Scene rootScene;
+	protected VBox rootPane;
+
+	/**
+	 * Creates the stage with whichever size is calculated
+	 * @param stageColor The color ID of the image this stage is connected to
+	 */
+	ImageFXStage(Color stageColor) {
 		super();
 		this.stageColor = stageColor;
+		setScene( rootScene = new Scene(rootPane = new VBox()) );
+		rootScene.getStylesheets().add("/main/RootStyles.css");
+//		rootPane.setBackground(new Background(new BackgroundFill(stageColor, null, null)));
 	}
 
+	/**
+	 * Creates a stage with a given size
+	 * @param stageColor The color ID of the image this stage is connected to
+	 * @param width the width of the stage
+	 * @param height the height of the stage
+	 */
+	ImageFXStage(Color stageColor, int width, int height) {
+		super();
+		this.stageColor = stageColor;
+		setScene( rootScene = new Scene(rootPane = new VBox(), width, height) );
+		rootScene.getStylesheets().add("/main/RootStyles.css");
+	}
+
+	/**
+	 * PromptStage is a simple
+	 */
 	class PromptStage extends Stage {
 
 		private TextArea status;
@@ -37,31 +65,34 @@ public abstract class ImageFXStage extends Stage {
 		/**
 		 * @param nodes message or input nodes; action decided by the caller.
 		 */
-		public PromptStage(String promptMessage, Node... nodes) {
+		PromptStage(String promptMessage, boolean showStatusMessageField, Node... nodes) {
 			Text message = new Text(promptMessage);
-
-			status = new TextArea();
-			status.setEditable(false);
-			status.setPrefRowCount(2);
-			status.setPrefColumnCount(20);
-			status.setWrapText(true);
-
 			/* Add static and received nodes to the stage */
 			VBox inputContainer = new VBox(message);
 			for (Node node : nodes)
 				inputContainer.getChildren().add(node);
-			inputContainer.getChildren().add(status);
+
+			if (showStatusMessageField) {
+				status = new TextArea();
+				status.setEditable(false);
+				status.setPrefRowCount(2);
+				status.setPrefColumnCount(20);
+				status.setWrapText(true);
+				inputContainer.getChildren().add(status);
+			}
 
 			inputContainer.setPadding(new Insets(10));
 			inputContainer.setSpacing(10);
 			inputContainer.setAlignment(Pos.CENTER);
 
 			setScene(new Scene(inputContainer));
-
+			inputContainer.setOnKeyReleased(input -> {
+				System.out.println( input.getText() );
+			});
 			show();
 		}
 
-		public void setStatusMessage(String message) {
+		void setStatusMessage(String message) {
 			status.setText(message);
 		}
 	}
